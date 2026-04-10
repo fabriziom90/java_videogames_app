@@ -1,5 +1,6 @@
 package com.videogames.controllers;
 
+import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -16,17 +17,21 @@ import com.videogames.interfaces.UserRepository;
 import com.videogames.models.User;
 import com.videogames.services.CustomUserDetailService;
 
+import jakarta.servlet.http.HttpServletRequest;
+
 @Controller
 public class AuthController {
 	
 	private final UserRepository userRepository;
 	private final PasswordEncoder passwordEncoder;
 	private final CustomUserDetailService userDetailsService;
+	private final AuthenticationManager authenticationManager;
 	
-	public AuthController(UserRepository userRepository, PasswordEncoder passwordEncoder, CustomUserDetailService userDetailsService) {
+	public AuthController(UserRepository userRepository, PasswordEncoder passwordEncoder, CustomUserDetailService userDetailsService, AuthenticationManager authenticationManager) {
 		this.userRepository = userRepository;
 		this.passwordEncoder = passwordEncoder;
 		this.userDetailsService = userDetailsService;
+		this.authenticationManager = authenticationManager;
 	}
 	
 	@GetMapping("/login")
@@ -41,7 +46,7 @@ public class AuthController {
 	}
 	
 	@PostMapping("/register")
-	public String register(@ModelAttribute User user, Model model, RedirectAttributes redirectAttributes) {
+	public String register(@ModelAttribute User user, Model model, HttpServletRequest request, RedirectAttributes redirectAttributes) {
 		if(userRepository.existsByUsername(user.getUsername())) {
 			redirectAttributes.addFlashAttribute("error", "Username già esistente!");
 			return "redirect:/register";
@@ -51,18 +56,32 @@ public class AuthController {
 		user.setRole("ROLE_USER");
 		userRepository.save(user);
 		
-		UserDetails userDetails = userDetailsService.loadUserByUsername(user.getUsername());
-		
-		Authentication authentication = new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
-		
+		UserDetails userDetails =
+		        userDetailsService.loadUserByUsername(user.getUsername());
+
+		Authentication authentication =
+		        new UsernamePasswordAuthenticationToken(
+		                userDetails,
+		                null,
+		                userDetails.getAuthorities()
+		        );
+
 		SecurityContextHolder.getContext().setAuthentication(authentication);
+		
+		request.getSession(true)
+        .setAttribute(
+                "SPRING_SECURITY_CONTEXT",
+                SecurityContextHolder.getContext()
+        );
 		
 		redirectAttributes.addFlashAttribute("success", "Registrazione completata!");
 		return "redirect:/home";
 	}
 	
 	@GetMapping("/home")
-	public String home() {
+	public String home(Authentication authentication) {
+		
+		System.out.println(authentication);
 		return "home/home";
 	}
 }
